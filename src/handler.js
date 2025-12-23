@@ -1,275 +1,303 @@
 import { userState } from './userState.js';
-import { handleCallButton } from './features/callButton.js';
-import { handleUrlButton } from './features/urlButton.js';
-import { handleQuickReplyButton } from './features/quickReplyButton.js';
-import { handleCopyButton } from './features/copyButton.js';
 
 export async function handler(sock, msg) {
-  // Check if message exists
   if (!msg?.message) return;
-  
   const from = msg.key.remoteJid;
-  
-  // Skip group messages completely
-  if (from.endsWith('@g.us')) {
+  const state = userState.get(from) || { step: 'start', page: 1, company: null };
+
+  // Group messages ignore කරන්න
+  if (from.endsWith('@g.us')) return;
+
+  const text = msg.message?.conversation || 
+                msg.message?.extendedTextMessage?.text || 
+                msg.message?.buttonsResponseMessage?.selectedButtonId ||
+                '';
+
+  // Welcome message for any text
+  if (text.toLowerCase().includes('hi') || text.toLowerCase().includes('hello') || text === '' || text.toLowerCase().includes('start')) {
+    await sendWelcomeMenu(sock, from);
+    userState.set(from, { step: 'welcome', page: 1, company: null });
     return;
   }
-  
-  // 🔴 IMPORTANT: Check if the message is a reply to the bot's message
-  // We'll track which messages need a reply
-  
-  let rowId;
-  try {
-    if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage) {
-      rowId = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson).id;
-    } else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
-      rowId = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
-    }
-  } catch {}
 
-  const btnId = msg.message?.buttonsResponseMessage?.selectedButtonId;
-
-  // Handle navigation buttons - these are always responses to bot's messages
-  if (btnId === 'next_page' || btnId === 'prev_page' || btnId === 'back_to_main') {
-    const state = userState.get(from) || { step: 'start', page: 1 };
-    
-    if (btnId === 'next_page') {
-      userState.set(from, { step: 'menuMain', page: state.page + 1 });
-      await sendIntroMenu(sock, from, state.page + 1);
-      return;
-    }
-
-    if (btnId === 'prev_page') {
-      userState.set(from, { step: 'menuMain', page: state.page - 1 });
-      await sendIntroMenu(sock, from, state.page - 1);
-      return;
-    }
-
-    if (btnId === 'back_to_main') {
-      userState.set(from, { step: 'menuMain', page: 1 });
-      await sendIntroMenu(sock, from, 1);
-      return;
-    }
+  // Handle company selection
+  if (text === '1' || text.toLowerCase().includes('software')) {
+    userState.set(from, { step: 'software', page: 1, company: 'software' });
+    await sendSoftwareMenu(sock, from, 1);
+    return;
   }
 
-  // Handle menu selections from bot's interactive messages
-  if (rowId) {
-    switch (rowId) {
-      case 'call':
-        await handleCallButton(sock, from);
-        break;
-      case 'url':
-        await handleUrlButton(sock, from);
-        break;
-      case 'quick':
-        await handleQuickReplyButton(sock, from);
-        break;
-      case 'copy':
-        await handleCopyButton(sock, from);
-        break;
-      case 'service1':
-        await sock.sendMessage(from, { 
-          text: '📌 *Custom Software Development*\n\nWe create tailored software solutions that meet your specific business needs. From enterprise applications to specialized tools, we build software that drives efficiency and growth.' 
-        });
-        break;
-      case 'service2':
-        await sock.sendMessage(from, { 
-          text: '🌐 *Web & Website Development*\n\nProfessional website development services including responsive design, e-commerce platforms, content management systems, and custom web applications.' 
-        });
-        break;
-      case 'service3':
-        await sock.sendMessage(from, { 
-          text: '🛒 *E-Commerce Solutions*\n\nComplete e-commerce development including shopping carts, payment gateway integration, inventory management, and mobile-responsive storefronts.' 
-        });
-        break;
-      case 'service4':
-        await sock.sendMessage(from, { 
-          text: '📱 *Mobile App Development*\n\nNative and cross-platform mobile applications for iOS and Android. We build user-friendly apps with modern frameworks and technologies.' 
-        });
-        break;
-      case 'service5':
-        await sock.sendMessage(from, { 
-          text: '🎨 *UI / UX Design*\n\nUser-centered design services that create intuitive, engaging, and visually appealing interfaces for websites and applications.' 
-        });
-        break;
-      case 'service6':
-        await sock.sendMessage(from, { 
-          text: '🤖 *AI & Automation Solutions*\n\nImplement AI-powered solutions including chatbots, process automation, machine learning models, and intelligent data analysis.' 
-        });
-        break;
-      case 'service7':
-        await sock.sendMessage(from, { 
-          text: '🔌 *API Integration*\n\nSeamless integration of various systems and services through custom API development, third-party API integration, and middleware solutions.' 
-        });
-        break;
-      case 'service8':
-        await sock.sendMessage(from, { 
-          text: '☁️ *Cloud & Hosting Services*\n\nCloud migration, setup, and management services. We offer hosting solutions with high availability, scalability, and security.' 
-        });
-        break;
-      case 'service9':
-        await sock.sendMessage(from, { 
-          text: '🛠️ *Maintenance & Support*\n\nOngoing technical support, maintenance, updates, and monitoring services to keep your systems running smoothly.' 
-        });
-        break;
-      case 'service10':
-        await sock.sendMessage(from, { 
-          text: '💼 *Digital Consulting*\n\nExpert advice on digital transformation, technology strategy, system architecture, and digital optimization for your business.' 
-        });
-        break;
-      case 'service11':
-        await sock.sendMessage(from, { 
-          text: '📢 *Branding & SEO*\n\nComprehensive branding services and search engine optimization to improve your online visibility and brand recognition.' 
-        });
-        break;
-      case 'service12':
-        await sock.sendMessage(from, { 
-          text: '📞 *Contact & Get a Quote*\n\nReady to start your project? Contact us for a free consultation and detailed quote.\n\n📧 Email: info@novonex.com\n🌐 Website: www.novonex.com\n📱 Phone: +94 77 123 4567' 
-        });
-        break;
-      default:
-        await sock.sendMessage(from, { 
-          text: 'Please select a valid option from the menu.' 
-        });
+  if (text === '2' || text.toLowerCase().includes('digital')) {
+    userState.set(from, { step: 'digital', page: 1, company: 'digital' });
+    await sendDigitalMenu(sock, from, 1);
+    return;
+  }
+
+  // Handle navigation buttons
+  if (text === 'next_page') {
+    if (state.company === 'software') {
+      userState.set(from, { ...state, page: state.page + 1 });
+      await sendSoftwareMenu(sock, from, state.page + 1);
+    } else if (state.company === 'digital') {
+      userState.set(from, { ...state, page: state.page + 1 });
+      await sendDigitalMenu(sock, from, state.page + 1);
     }
     return;
   }
 
-  // 🔴 CRITICAL CHANGE: Check if this is a reply to bot's message
-  // We'll check if the message has contextInfo (reply context)
-  const isReply = msg.message?.extendedTextMessage?.contextInfo;
-  const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  
-  // Check if it's a reply AND the quoted message contains bot's signature
-  const isReplyToBot = isReply && (
-    quotedMessage?.conversation?.includes('NovoNex') ||
-    quotedMessage?.conversation?.includes('Services Menu') ||
-    quotedMessage?.conversation?.includes('Choose an option')
-  );
-  
-  // Also check if it's a direct response to interactive buttons
-  const isButtonResponse = btnId || rowId;
-  
-  // Extract message text
-  const messageText = msg.message?.conversation || 
-                     msg.message?.extendedTextMessage?.text ||
-                     '';
-  
-  // Get user state
-  const state = userState.get(from) || { step: 'start', page: 1, lastBotMessageId: null };
-  
-  // 🔴 ONLY respond if:
-  // 1. It's a button response (already handled above)
-  // 2. OR it's a reply to bot's message
-  // 3. OR it's the VERY FIRST message from this user
-  const isFirstMessage = state.step === 'start';
-  
-  if (isButtonResponse || isReplyToBot || isFirstMessage) {
-    if (isFirstMessage) {
-      // First message from user
-      await sock.sendMessage(from, {
-        text: `👋 *Hello! Welcome to NovoNex Support!*\n\nThank you for contacting us. I'm your personal assistant. Here's how I can help you:`
-      });
-      await sendIntroMenu(sock, from, 1);
-      userState.set(from, { step: 'menuMain', page: 1, lastBotMessageId: null });
-    } else if (isReplyToBot || messageText.toLowerCase().includes('menu')) {
-      // User replied to bot or asked for menu
-      await sock.sendMessage(from, {
-        text: `📋 *Here's our services menu again.*\n\nSelect an option below to learn more:`
-      });
-      await sendIntroMenu(sock, from, state.page);
+  if (text === 'prev_page') {
+    if (state.company === 'software') {
+      userState.set(from, { ...state, page: state.page - 1 });
+      await sendSoftwareMenu(sock, from, state.page - 1);
+    } else if (state.company === 'digital') {
+      userState.set(from, { ...state, page: state.page - 1 });
+      await sendDigitalMenu(sock, from, state.page - 1);
     }
     return;
   }
-  
-  // If none of the above conditions are met, DO NOT RESPOND
-  // This prevents the bot from responding to every random message
-  console.log(`🤐 Ignoring message from ${from}: "${messageText.substring(0, 50)}..."`);
+
+  if (text === 'back_to_welcome') {
+    userState.set(from, { step: 'welcome', page: 1, company: null });
+    await sendWelcomeMenu(sock, from);
+    return;
+  }
+
+  if (text === 'contact_info') {
+    await sock.sendMessage(from, {
+      text: `📞 *Contact Information*\n\n` +
+            `*NovoNex Software Solutions:*\n` +
+            `📱 Hotline: 077 069 1283\n` +
+            `📧 Email: info@novonex.com\n` +
+            `🌐 Website: www.novonex.com\n\n` +
+            `*NovoNex Digital Works:*\n` +
+            `📱 Hotline: 075 339 4278\n` +
+            `📧 Email: digital@novonex.com\n` +
+            `🌐 Website: digital.novonex.com`
+    });
+    return;
+  }
+
+  // Handle service selections
+  if (text.startsWith('service')) {
+    await handleServiceSelection(sock, from, text);
+    return;
+  }
+
+  // If no match, show welcome
+  await sendWelcomeMenu(sock, from);
 }
 
-async function sendIntroMenu(sock, from, page = 1) {
+async function sendWelcomeMenu(sock, from) {
+  await sock.sendMessage(from, {
+    text: `🤖 *Welcome to NovoNex!*\n\n` +
+          `We provide comprehensive technology and digital solutions for your business.\n\n` +
+          `*Please select a service category:*\n\n` +
+          `1️⃣ *NovoNex Software Solutions*\n` +
+          `   - Custom Software Development\n` +
+          `   - Web & Mobile Applications\n` +
+          `   - System Integration\n\n` +
+          `2️⃣ *NovoNex Digital Works*\n` +
+          `   - Digital Marketing\n` +
+          `   - Social Media Management\n` +
+          `   - Branding & SEO\n\n` +
+          `*Type 1 or 2 to continue, or reply with your query.*`,
+    buttons: [
+      {
+        buttonId: '1',
+        buttonText: { displayText: '🚀 Software Solutions' }
+      },
+      {
+        buttonId: '2',
+        buttonText: { displayText: '📱 Digital Works' }
+      },
+      {
+        buttonId: 'contact_info',
+        buttonText: { displayText: '📞 Contact Info' }
+      }
+    ]
+  });
+}
+
+async function sendSoftwareMenu(sock, from, page = 1) {
   const pages = [
     {
-      title: 'Development Services',
-      rows: [
-        { title: '📌 Custom Software Development', description: 'Tailored software solutions', id: 'service1' },
-        { title: '🌐 Web & Website Development', description: 'Professional web development', id: 'service2' },
-        { title: '🛒 E-Commerce Solutions', description: 'Online store development', id: 'service3' },
-        { title: '📱 Mobile App Development', description: 'iOS & Android apps', id: 'service4' },
-        { title: '🎨 UI / UX Design', description: 'User interface design', id: 'service5' },
-        { title: '🤖 AI & Automation Solutions', description: 'AI integration & automation', id: 'service6' },
-      ],
+      title: '🏢 NovoNex Software Solutions – Our Services (Page 1/3)',
+      services: [
+        { id: 'service1', title: '1️⃣ Custom Software Development' },
+        { id: 'service2', title: '2️⃣ Web Application Development' },
+        { id: 'service3', title: '3️⃣ Website Development' },
+        { id: 'service4', title: '4️⃣ E-Commerce Solutions' }
+      ]
     },
     {
-      title: 'Technical & Business Services',
-      rows: [
-        { title: '🔌 API Integration', description: 'System integration services', id: 'service7' },
-        { title: '☁️ Cloud & Hosting Services', description: 'Cloud solutions & hosting', id: 'service8' },
-        { title: '🛠️ Maintenance & Support', description: 'Ongoing support & maintenance', id: 'service9' },
-        { title: '💼 Digital Consulting', description: 'Expert digital consulting', id: 'service10' },
-        { title: '📢 Branding & SEO', description: 'Branding & SEO optimization', id: 'service11' },
-        { title: '📞 Contact & Get a Quote', description: 'Get in touch for quotes', id: 'service12' },
-      ],
+      title: '🏢 NovoNex Software Solutions – Our Services (Page 2/3)',
+      services: [
+        { id: 'service5', title: '5️⃣ Mobile Application Development' },
+        { id: 'service6', title: '6️⃣ UI / UX Design' },
+        { id: 'service7', title: '7️⃣ AI & Automation Solutions' },
+        { id: 'service8', title: '8️⃣ System Integration & API Development' }
+      ]
     },
     {
-      title: 'Button Demos',
-      rows: [
-        { title: '📞 Call Button Demo', description: 'Example: Call Button', id: 'call' },
-        { title: '🔗 URL Button Demo', description: 'Example: URL Button', id: 'url' },
-        { title: '⚡ Quick Reply Button Demo', description: 'Example: Quick Reply Button', id: 'quick' },
-        { title: '📋 Copy Button Demo', description: 'Example: Copy Button', id: 'copy' },
-      ],
+      title: '🏢 NovoNex Software Solutions – Our Services (Page 3/3)',
+      services: [
+        { id: 'service9', title: '9️⃣ Cloud & Hosting Services' },
+        { id: 'service10', title: '🔟 Maintenance & Technical Support' },
+        { id: 'service11', title: '1️⃣1️⃣ Digital Solutions & Consulting' },
+        { id: 'service12', title: '1️⃣2️⃣ Branding & Digital Presence' }
+      ]
     }
   ];
 
   const currentPage = pages[page - 1];
-  const totalPages = pages.length;
-
-  let footerText = `Page ${page} of ${totalPages} | NovoNex Software Solutions`;
-  
-  // Create navigation buttons
   const buttons = [];
-  
+
   if (page > 1) {
     buttons.push({
       buttonId: 'prev_page',
-      buttonText: { displayText: '⬅️ Previous' },
-      type: 1
-    });
-  }
-  
-  buttons.push({
-    buttonId: 'back_to_main',
-    buttonText: { displayText: '🏠 Main Menu' },
-    type: 1
-  });
-  
-  if (page < totalPages) {
-    buttons.push({
-      buttonId: 'next_page',
-      buttonText: { displayText: 'Next ➡️' },
-      type: 1
+      buttonText: { displayText: '⬅️ Previous' }
     });
   }
 
+  buttons.push({
+    buttonId: 'back_to_welcome',
+    buttonText: { displayText: '🏠 Main Menu' }
+  });
+
+  if (page < pages.length) {
+    buttons.push({
+      buttonId: 'next_page',
+      buttonText: { displayText: 'Next ➡️' }
+    });
+  }
+
+  buttons.push({
+    buttonId: 'contact_info',
+    buttonText: { displayText: '📞 Contact Info' }
+  });
+
   await sock.sendMessage(from, {
-    text: `🤖 *Choose an option from the menu below:*`,
-    subtitle: currentPage.title,
-    footer: footerText,
-    interactiveButtons: [
-      {
-        name: 'single_select',
-        buttonParamsJson: JSON.stringify({
-          title: `Services Menu (Page ${page}/${totalPages})`,
-          sections: [
-            {
-              title: currentPage.title,
-              rows: currentPage.rows,
-            },
-          ],
-        }),
-      },
-    ],
+    text: `*${currentPage.title}*\n\n` +
+          `*Select a service for more details:*\n\n` +
+          currentPage.services.map(service => service.title).join('\n'),
     buttons: buttons
+  });
+}
+
+async function sendDigitalMenu(sock, from, page = 1) {
+  const pages = [
+    {
+      title: '🚀 NovoNex Digital Works – Digital Marketing Services (Page 1/4)',
+      services: [
+        { id: 'service13', title: '1️⃣ Digital Marketing Strategy & Consulting' },
+        { id: 'service14', title: '2️⃣ Social Media Marketing (SMM)' },
+        { id: 'service15', title: '3️⃣ Social Media Advertising (Paid Ads)' }
+      ]
+    },
+    {
+      title: '🚀 NovoNex Digital Works – Digital Marketing Services (Page 2/4)',
+      services: [
+        { id: 'service16', title: '4️⃣ Content Creation & Creative Design' },
+        { id: 'service17', title: '5️⃣ Search Engine Optimization (SEO)' },
+        { id: 'service18', title: '6️⃣ Search Engine Marketing (SEM)' }
+      ]
+    },
+    {
+      title: '🚀 NovoNex Digital Works – Digital Marketing Services (Page 3/4)',
+      services: [
+        { id: 'service19', title: '7️⃣ Branding & Brand Identity' },
+        { id: 'service20', title: '8️⃣ Website & Funnel Marketing' },
+        { id: 'service21', title: '9️⃣ Email & WhatsApp Marketing' }
+      ]
+    },
+    {
+      title: '🚀 NovoNex Digital Works – Digital Marketing Services (Page 4/4)',
+      services: [
+        { id: 'service22', title: '🔟 Influencer & Video Marketing' },
+        { id: 'service23', title: '1️⃣1️⃣ Analytics & Performance Tracking' },
+        { id: 'service24', title: '1️⃣2️⃣ Local & Business Marketing' },
+        { id: 'service25', title: '1️⃣3️⃣ Marketing Automation' }
+      ]
+    }
+  ];
+
+  const currentPage = pages[page - 1];
+  const buttons = [];
+
+  if (page > 1) {
+    buttons.push({
+      buttonId: 'prev_page',
+      buttonText: { displayText: '⬅️ Previous' }
+    });
+  }
+
+  buttons.push({
+    buttonId: 'back_to_welcome',
+    buttonText: { displayText: '🏠 Main Menu' }
+  });
+
+  if (page < pages.length) {
+    buttons.push({
+      buttonId: 'next_page',
+      buttonText: { displayText: 'Next ➡️' }
+    });
+  }
+
+  buttons.push({
+    buttonId: 'contact_info',
+    buttonText: { displayText: '📞 Contact Info' }
+  });
+
+  await sock.sendMessage(from, {
+    text: `*${currentPage.title}*\n\n` +
+          `*Select a service for more details:*\n\n` +
+          currentPage.services.map(service => service.title).join('\n'),
+    buttons: buttons
+  });
+}
+
+async function handleServiceSelection(sock, from, serviceId) {
+  const serviceDetails = {
+    'service1': `*1️⃣ Custom Software Development*\n\n• Business Management Systems\n• Inventory / POS Systems\n• Accounting & Billing Systems\n• CRM / ERP Systems\n\n📞 Contact: 077 069 1283`,
+    'service2': `*2️⃣ Web Application Development*\n\n• Custom Web Applications\n• Admin Dashboards\n• Booking Systems\n• Learning Management Systems (LMS)\n• Job Portals\n• SaaS Platforms\n\n📞 Contact: 077 069 1283`,
+    'service3': `*3️⃣ Website Development*\n\n• Business Websites\n• Corporate Websites\n• Portfolio Websites\n• Blog & Content Websites\n• Landing Pages\n• Multi-language Websites\n\n📞 Contact: 077 069 1283`,
+    'service4': `*4️⃣ E-Commerce Solutions*\n\n• Online Store Development\n• Payment Gateway Integration\n• Product & Order Management\n• Customer Accounts\n• Admin Panel\n\n📞 Contact: 077 069 1283`,
+    'service5': `*5️⃣ Mobile Application Development*\n\n• Android Applications\n• iOS Applications\n• Hybrid Apps (React Native / Flutter)\n• App UI Design\n• API Integration\n\n📞 Contact: 077 069 1283`,
+    'service6': `*6️⃣ UI / UX Design*\n\n• Website UI Design\n• Mobile App UI Design\n• Dashboard UI Design\n• User Experience Optimization\n• Figma / Adobe XD Designs\n\n📞 Contact: 077 069 1283`,
+    'service7': `*7️⃣ AI & Automation Solutions*\n\n• AI-powered Web Apps\n• Chatbots\n• Image / Content Generation Tools\n• Automation Systems\n• AI Integration for Businesses\n\n📞 Contact: 077 069 1283`,
+    'service8': `*8️⃣ System Integration & API Development*\n\n• Third-party API Integration\n• Payment Gateways\n• SMS / Email Systems\n• Maps & Location Services\n• ERP / CRM Integration\n\n📞 Contact: 077 069 1283`,
+    'service9': `*9️⃣ Cloud & Hosting Services*\n\n• Domain Registration\n• Web Hosting\n• Cloud Deployment\n• Server Setup & Maintenance\n• Backup & Security Management\n\n📞 Contact: 077 069 1283`,
+    'service10': `*🔟 Maintenance & Technical Support*\n\n• Software Maintenance\n• Bug Fixing\n• Feature Updates\n• Performance Optimization\n• Security Updates\n\n📞 Contact: 077 069 1283`,
+    'service11': `*1️⃣1️⃣ Digital Solutions & Consulting*\n\n• IT Consulting\n• Business Digital Transformation\n• System Planning & Architecture\n• Startup Tech Consultation\n\n📞 Contact: 077 069 1283`,
+    'service12': `*1️⃣2️⃣ Branding & Digital Presence*\n\n• Logo Design\n• Brand Identity\n• Website Content Setup\n• SEO Optimization\n• Social Media Integration\n\n📞 Contact: 077 069 1283`,
+    'service13': `*1️⃣ Digital Marketing Strategy & Consulting*\n\n• Business Digital Marketing Planning\n• Brand Growth Strategy\n• Campaign Planning\n• Market & Competitor Analysis\n• Marketing Consultation\n\n📞 Contact: 075 339 4278`,
+    'service14': `*2️⃣ Social Media Marketing (SMM)*\n\n• Facebook Marketing\n• Instagram Marketing\n• TikTok Marketing\n• LinkedIn Marketing\n• YouTube Channel Management\n\n📞 Contact: 075 339 4278`,
+    'service15': `*3️⃣ Social Media Advertising (Paid Ads)*\n\n• Facebook & Instagram Ads\n• TikTok Ads\n• Google Display Ads\n• Lead Generation Campaigns\n• Conversion & Sales Ads\n\n📞 Contact: 075 339 4278`,
+    'service16': `*4️⃣ Content Creation & Creative Design*\n\n• Graphic Design (Posts, Banners, Flyers)\n• Video Editing (Reels, Shorts, Ads)\n• Motion Graphics\n• Brand Visual Design\n\n📞 Contact: 075 339 4278`,
+    'service17': `*5️⃣ Search Engine Optimization (SEO)*\n\n• On-Page SEO\n• Technical SEO\n• Keyword Research\n• Content Optimization\n• Google Ranking Improvement\n\n📞 Contact: 075 339 4278`,
+    'service18': `*6️⃣ Search Engine Marketing (SEM)*\n\n• Google Search Ads\n• Google Shopping Ads\n• Keyword Targeted Campaigns\n• ROI-focused Ad Management\n\n📞 Contact: 075 339 4278`,
+    'service19': `*7️⃣ Branding & Brand Identity*\n\n• Logo Design\n• Brand Guidelines\n• Color & Typography System\n• Visual Identity Design\n• Brand Positioning\n\n📞 Contact: 075 339 4278`,
+    'service20': `*8️⃣ Website & Funnel Marketing*\n\n• Landing Page Design\n• Sales Funnel Setup\n• Website Conversion Optimization\n• Lead Capture Forms\n• Email Integration\n\n📞 Contact: 075 339 4278`,
+    'service21': `*9️⃣ Email & WhatsApp Marketing*\n\n• Email Campaigns\n• Newsletter Design\n• WhatsApp Bulk Messaging\n• Automation Setup\n• Customer Follow-up Systems\n\n📞 Contact: 075 339 4278`,
+    'service22': `*🔟 Influencer & Video Marketing*\n\n• Influencer Collaborations\n• YouTube Video Marketing\n• Short-form Video Strategy\n• Reels & TikTok Growth Plans\n\n📞 Contact: 075 339 4278`,
+    'service23': `*1️⃣1️⃣ Analytics & Performance Tracking*\n\n• Google Analytics Setup\n• Meta Pixel Integration\n• Campaign Performance Reports\n• Audience Behavior Analysis\n• Monthly Marketing Reports\n\n📞 Contact: 075 339 4278`,
+    'service24': `*1️⃣2️⃣ Local & Business Marketing*\n\n• Google My Business Optimization\n• Local SEO\n• Map-based Business Promotion\n• Review & Reputation Management\n\n📞 Contact: 075 339 4278`,
+    'service25': `*1️⃣3️⃣ Marketing Automation*\n\n• CRM Integration\n• Auto Lead Response Systems\n• Chatbot Setup\n• AI Automation for Marketing\n\n📞 Contact: 075 339 4278`
+  };
+
+  const details = serviceDetails[serviceId] || `Service details not found.\n\n📞 Contact:\nSoftware Solutions: 077 069 1283\nDigital Works: 075 339 4278`;
+
+  await sock.sendMessage(from, {
+    text: details,
+    buttons: [
+      {
+        buttonId: 'back_to_welcome',
+        buttonText: { displayText: '🏠 Main Menu' }
+      },
+      {
+        buttonId: 'contact_info',
+        buttonText: { displayText: '📞 More Contact Info' }
+      }
+    ]
   });
 }
