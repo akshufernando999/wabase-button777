@@ -5,18 +5,29 @@ export async function handler(sock, msg) {
   const from = msg.key.remoteJid;
   const state = userState.get(from) || { step: 'start', page: 1, company: null };
 
-  // Group messages ignore කරන්න
+  // Ignore group messages
   if (from.endsWith('@g.us')) return;
+
+  // Ignore messages sent by the bot itself
+  if (msg.key.fromMe) return;
 
   const text = msg.message?.conversation || 
                 msg.message?.extendedTextMessage?.text || 
                 msg.message?.buttonsResponseMessage?.selectedButtonId ||
                 '';
 
-  // Welcome message for any text
-  if (text.toLowerCase().includes('hi') || text.toLowerCase().includes('hello') || text === '' || text.toLowerCase().includes('start')) {
-    await sendWelcomeMenu(sock, from);
+  console.log(`Received from ${from}: "${text}" | State: ${state.step}`);
+
+  // Welcome message only for specific triggers
+  if (state.step === 'start' || 
+      text.toLowerCase().includes('hi') || 
+      text.toLowerCase().includes('hello') || 
+      text.toLowerCase().includes('start') ||
+      text.toLowerCase().includes('menu')) {
+    
+    // Update state first
     userState.set(from, { step: 'welcome', page: 1, company: null });
+    await sendWelcomeMenu(sock, from);
     return;
   }
 
@@ -35,23 +46,27 @@ export async function handler(sock, msg) {
 
   // Handle navigation buttons
   if (text === 'next_page') {
-    if (state.company === 'software') {
-      userState.set(from, { ...state, page: state.page + 1 });
-      await sendSoftwareMenu(sock, from, state.page + 1);
-    } else if (state.company === 'digital') {
-      userState.set(from, { ...state, page: state.page + 1 });
-      await sendDigitalMenu(sock, from, state.page + 1);
+    if (state.company === 'software' && state.step === 'software') {
+      const newPage = state.page + 1;
+      userState.set(from, { ...state, page: newPage });
+      await sendSoftwareMenu(sock, from, newPage);
+    } else if (state.company === 'digital' && state.step === 'digital') {
+      const newPage = state.page + 1;
+      userState.set(from, { ...state, page: newPage });
+      await sendDigitalMenu(sock, from, newPage);
     }
     return;
   }
 
   if (text === 'prev_page') {
-    if (state.company === 'software') {
-      userState.set(from, { ...state, page: state.page - 1 });
-      await sendSoftwareMenu(sock, from, state.page - 1);
-    } else if (state.company === 'digital') {
-      userState.set(from, { ...state, page: state.page - 1 });
-      await sendDigitalMenu(sock, from, state.page - 1);
+    if (state.company === 'software' && state.step === 'software' && state.page > 1) {
+      const newPage = state.page - 1;
+      userState.set(from, { ...state, page: newPage });
+      await sendSoftwareMenu(sock, from, newPage);
+    } else if (state.company === 'digital' && state.step === 'digital' && state.page > 1) {
+      const newPage = state.page - 1;
+      userState.set(from, { ...state, page: newPage });
+      await sendDigitalMenu(sock, from, newPage);
     }
     return;
   }
@@ -83,8 +98,12 @@ export async function handler(sock, msg) {
     return;
   }
 
-  // If no match, show welcome
-  await sendWelcomeMenu(sock, from);
+  // If user sends random text and not in welcome state, show welcome menu
+  if (state.step !== 'welcome') {
+    userState.set(from, { step: 'welcome', page: 1, company: null });
+    await sendWelcomeMenu(sock, from);
+  }
+  // If already in welcome state and user sends random text, do nothing (prevent loop)
 }
 
 async function sendWelcomeMenu(sock, from) {
@@ -100,7 +119,7 @@ async function sendWelcomeMenu(sock, from) {
           `   - Digital Marketing\n` +
           `   - Social Media Management\n` +
           `   - Branding & SEO\n\n` +
-          `*Type 1 or 2 to continue, or reply with your query.*`,
+          `*Click a button below or type 1 or 2 to continue.*`,
     buttons: [
       {
         buttonId: '1',
